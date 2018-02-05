@@ -2,85 +2,90 @@
 
 import socket
 import sys
+# import serial
 import thread
-import time
-import serial
 
-# Pin Definitons:
-bListen = True
-PERIOD = 0.01
-bRun = True
-ser = serial.Serial(
-    port='/dev/ttyAMA0',
-    baudrate=9600
-)
+username = "Ilya"
+password = "4592"
 
-def connectionThread(connection, addr):
-  global LED_R, LED_G, LED_B, LED_R_STATE, LED_B_STATE, LED_G_STATE, bListen, LED_R_PWM, LED_G_PWM, LED_B_PWM, ser
-  try:
-    received = connection.recv(200)
-    print 'received: ' + received
+# ser = serial.Serial(
+#     port='/dev/ttyAMA0',
+#     baudrate=9600
+# )
 
-    if received == 'LED_ON':
-      print 'Turning all LEDs ON'
-      ser.write('9')
-      ser.write('j')
-      ser.write('J')
 
-    if received == 'LED_OFF':
-      print 'Turning all LEDs OFF'
-      ser.write('0')
-      ser.write('a')
-      ser.write('A')
+def connection_handler(connection):
+    global ser, username, password
+    try:
+        received = 0
+        while received >= 0:
+            received = connection.recv(200)
+            if not received:
+                print "socket closed"
+                return
+            print '\r\n\r\nreceived: ' + received
+            message_array = received.splitlines()
+            print "lines " + str(len(message_array))
+            for line in message_array:
+                print "line " + line
+            for message in message_array:
+                print "processing: " + message
+                string_array = message.split(';')
+                if len(string_array) != 4:
+                    print("Received wrong number of arguments\r\n" +
+                          "Expected 4, got " + str(len(string_array)))
+                    continue
 
-    array = received.split('_')
-    if len(array) == 3:
-      if array[1] == 'R':
-        ser.write(str(unichr(48 + int(array[2]))))
-      if array[1] == 'G':
-        ser.write(str(unichr(65 + int(array[2]))))
-      if array[1] == 'B':
-        ser.write(str(unichr(97 + int(array[2]))))
+                # verify username & password
+                if string_array[0] != username or string_array[1] != password:
+                    # connection.close()
+                    print "wrong username or password"
+                    print string_array[0]
+                    print string_array[1]
+                    #return
 
-  except socket.error:
-    print 'socket error'
-    #print str(socket.error)
-    connection.close()
+                # process command
+                if string_array[2] == "SET_LED_R":
+                    #ser.write(str(unichr(48 + int(string_array[3]))))
+                    print "setting red"
+                elif string_array[2] == "SET_LED_G":
+                    #ser.write(str(unichr(65 + int(string_array[3]))))
+                    print "setting green"
+                elif string_array[2] == "SET_LED_B":
+                    #ser.write(str(unichr(97 + int(string_array[3]))))
+                    print "setting blue"
+                else:
+                    print("Wrong command\r\n" +
+                          "Expected: \"SET_LED_R\" got \"" + string_array[2] + "\"")
+
+    except socket.error:
+        print 'socket error'
+        connection.close()
 
 
 def main():
-    global bRun, bListen
-
-    ledControlSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    print 'Socket created'
-
-    # Bind socket to local host and port
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        ledControlSocket.bind(('', 233))
+        server_socket.bind(('', 4592))
+        print 'Socket bind complete'
     except socket.error as msg:
-        print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+        print "Bind failed\r\n"
+        print msg
         sys.exit()
-
-    print 'Socket bind complete'
-
-    # Start listening on socket
-        ledControlSocket.listen(5)
+    server_socket.listen(5)
 
     # now keep talking with the client
     try:
         while 1:
             # wait to accept a connection - blocking call
-            conn, addr = ledControlSocket.accept()
-            print 'Connected with ' + addr[0] + ':' + str(addr[1])
-            #thread.start_new_thread(connectionThread, (conn,addr))
-
-            connectionThread(conn, addr)
+            connection, address = server_socket.accept()
+            print 'Connected with ' + address[0] + ':' + str(address[1])
+            thread.start_new(connection_handler, (connection,))
 
     except KeyboardInterrupt:
         print "Received Interrupt"
-        bListen = False
-        ledControlSocket.close()
-        bRun = False
+        server_socket.close()
+
 
 if __name__ == "__main__":
-  main()
+    main()
