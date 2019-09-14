@@ -1,1 +1,1 @@
-
+sudo apt install git gcc-msp430 msp430-libc mspdebug -y
